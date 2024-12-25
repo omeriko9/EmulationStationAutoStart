@@ -3,6 +3,8 @@
 
 namespace fs = boost::filesystem;
 
+
+
 std::string removeParenthesis(const std::string& str)
 {
 	// remove anything in parenthesis or brackets
@@ -41,6 +43,46 @@ std::string removeParenthesis(const std::string& str)
 
 	return ret;
 }
+
+
+std::string toLowerF(std::string str)
+{
+        for(unsigned int i = 0; i < str.length(); i++)
+        {
+                str[i] = std::tolower(str[i]);
+        }
+
+        return str;
+}
+
+std::string FileData::getName()
+{
+	return mPath.string();
+}
+
+FileData* FileData::lookupByPath(const std::string& path, bool recursive)
+{
+
+	printf("lookupByPath: %s\n", path);
+
+    if(toLowerF(mPath.string()) == toLowerF(path))
+    {
+    		printf("lookupByPath: FOUND!  %s\n", path);
+    	    return this;
+    }
+
+    if(recursive && (mType == FOLDER))
+    {
+        for(auto child : mChildren)
+        {
+            auto found = child->lookupByPath(path, true);
+            if(found != nullptr)
+                return found;
+        }
+    }
+    return nullptr;
+}
+
 
 
 FileData::FileData(FileType type, const fs::path& path, SystemData* system)

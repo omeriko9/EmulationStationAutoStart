@@ -36,6 +36,8 @@ public:
 	virtual ~FileData();
 
 	inline const std::string& getName() const { return metadata.get("name"); }
+	FileData* lookupByPath(const std::string& path, bool recursive);
+	std::string getName();
 	inline FileType getType() const { return mType; }
 	inline const boost::filesystem::path& getPath() const { return mPath; }
 	inline FileData* getParent() const { return mParent; }

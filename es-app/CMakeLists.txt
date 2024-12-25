@@ -147,3 +147,5 @@ SET(CPACK_PACKAGE_EXECUTABLES "emulationstation" "emulationstation")
 SET(CPACK_GENERATOR "TGZ;DEB")
 
 INCLUDE(CPack)
+target_link_libraries(emulationstation ${COMMON_LIBRARIES})
+

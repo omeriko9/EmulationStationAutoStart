@@ -28,6 +28,10 @@ namespace fs = boost::filesystem;
 
 bool scrape_cmdline = false;
 
+// forward declaration
+static void tryAutoLaunchGame(Window* window);
+
+
 bool parseArgs(int argc, char* argv[], unsigned int* width, unsigned int* height)
 {
 	for(int i = 1; i < argc; i++)
@@ -71,7 +75,12 @@ bool parseArgs(int argc, char* argv[], unsigned int* width, unsigned int* height
 		}else if(strcmp(argv[i], "--scrape") == 0)
 		{
 			scrape_cmdline = true;
-		}else if(strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0)
+		}
+		else if(strcmp(argv[i], "--auto-load") == 0) {
+			printf("auto load on startup: %s\n", argv[i+1]);
+			Settings::getInstance()->setString("AutoGameRomPath", argv[i+1]);
+		}
+		else if(strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0)
 		{
 #ifdef WIN32
 			// This is a bit of a hack, but otherwise output will go to nowhere
@@ -95,6 +104,7 @@ bool parseArgs(int argc, char* argv[], unsigned int* width, unsigned int* height
 				"--scrape			scrape using command line interface\n"
 				"--windowed			not fullscreen, should be used with --resolution\n"
 				"--vsync [1/on or 0/off]		turn vsync on or off (default is on)\n"
+				"--auto-load [path/to/game]     auto start a game before emulationstation\n"
 				"--help, -h			summon a sentient, angry tuba\n\n"
 				"More information available in README.md.\n";
 			return false; //exit after printing help
@@ -257,6 +267,8 @@ int main(int argc, char* argv[])
 		return run_scraper_cmdline();
 	}
 
+	
+
 	//dont generate joystick events while we're loading (hopefully fixes "automatically started emulator" bug)
 	SDL_JoystickEventState(SDL_DISABLE);
 
@@ -277,6 +289,9 @@ int main(int argc, char* argv[])
 
 	//generate joystick events since we're done loading
 	SDL_JoystickEventState(SDL_ENABLE);
+
+	
+	tryAutoLaunchGame(&window);
 
 	int lastTime = SDL_GetTicks();
 	bool running = true;
@@ -337,4 +352,92 @@ int main(int argc, char* argv[])
 	LOG(LogInfo) << "EmulationStation cleanly shutting down.";
 
 	return 0;
+}
+
+
+// --------------------------------------------------------------
+// Helper function to auto-launch the game if --auto-game is used
+// --------------------------------------------------------------
+static void tryAutoLaunchGame(Window* window)
+{
+	// Retrieve the path/emulator from Settings
+	std::string autoGamePath = Settings::getInstance()->getString("AutoGameRomPath");
+	if(autoGamePath.empty())
+		return; // no auto-launch requested
+
+	LOG(LogInfo) << "[AutoGame] Attempting to auto-launch: " << autoGamePath;
+
+	FileData* foundGame = nullptr;
+	SystemData* foundSystem = nullptr;
+
+	// Search all visible systems
+	for (auto* sys : SystemData::sSystemVector)
+	{
+		//if(!sys->isVisible())
+		//	continue;
+		if (sys->getRootFolder() == nullptr || sys->getRootFolder()->getChildren().empty())
+		{
+		    continue; // Skip systems without a valid root folder or games
+		}
+
+		FileData* root = sys->getRootFolder();
+		printf("main.cpp: tryAutoLaunchGame foreach: %s\n", root->getName());
+		if(root != nullptr)
+		{
+			// If your codebase does NOT already have a path-based lookup, see below for a sample implementation.
+			foundGame = root->lookupByPath(autoGamePath, true /* recursive */);
+			if(foundGame)
+			{
+				foundSystem = sys;
+				break;
+			}
+		}
+	}
+
+	if(!foundGame)
+	{
+		LOG(LogError) << "[AutoGame] Could not find the requested ROM: " << autoGamePath;
+		// Optionally show a message and return
+		window->pushGui(new GuiMsgBox(window,
+			"Failed to locate the specified ROM.\nLaunching normally.",
+			"OK", [] {}));
+		return;
+	}
+
+	// If the user wants to force a specific emulator/core
+	std::string autoEmulator = Settings::getInstance()->getString("AutoGameEmulator");
+	if(!autoEmulator.empty())
+	{
+		LOG(LogInfo) << "[AutoGame] Forcing emulator: " << autoEmulator;
+		// You might do something like store it in the FileData's metadata:
+		// foundGame->metadata.set("emulator", autoEmulator);
+		// Then patch your runcommand scripts to read this override if desired.
+	}
+
+	// Navigate UI to the system’s game list
+	//ViewController::get()->goToSystemView(foundSystem);
+	ViewController::get()->goToGameList(foundSystem);
+	SDL_Delay(100);
+
+	// Obtain the IGameListView for that system
+	auto gameListView = ViewController::get()->getGameListView(foundSystem);
+	if(!gameListView)
+	{
+		LOG(LogError) << "[AutoGame] getGameListView() returned nullptr. Aborting auto-launch.";
+		window->pushGui(new GuiMsgBox(window,
+			"Failed to get game list view.\nLaunching normally.",
+			"OK", [] {}));
+		return;
+	}
+
+	// (Optional) Move the cursor to the found game so it is selected in the list
+	gameListView->setCursor(foundGame);
+	SDL_Delay(100);
+	//FileData* cursor = getCursor();
+	// Finally, launch the game!
+	LOG(LogInfo) << "[AutoGame] Launching: " << foundGame->getName();
+	//gameListView->launch(cursor); //foundGame);
+	//ViewController::get()->launch(foundGame);
+	foundSystem->launchGame(window, foundGame);
+
 }

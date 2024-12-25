@@ -42,7 +42,7 @@ std::string toLower(std::string str)
 {
 	for(unsigned int i = 0; i < str.length(); i++)
 	{
-		str[i] = tolower(str[i]);
+		str[i] = std::tolower(str[i]);
 	}
 
 	return str;

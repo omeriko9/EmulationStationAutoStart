@@ -1,7 +1,7 @@
 #pragma once
 
 #include "views/gamelist/IGameListView.h"
-
+#include <stack>
 #include "components/TextComponent.h"
 #include "components/ImageComponent.h"
 
